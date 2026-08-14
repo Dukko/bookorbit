@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  ACHIEVEMENT_EVENT_ANNOTATION_CREATED,
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
   ACHIEVEMENT_EVENT_BOOK_HARDCOVER_EDITION_CHANGED,
   ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED,
   ACHIEVEMENT_EVENT_BOOK_RATING_CHANGED,
@@ -86,6 +89,18 @@ describe('HardcoverEventListener', () => {
     expect(mockScheduler.requestSync).toHaveBeenNthCalledWith(1, { userId: 1, bookId: 1, reason: 'rating' });
     expect(mockScheduler.requestSync).toHaveBeenNthCalledWith(2, { userId: 1, bookId: 2, reason: 'rating' });
     expect(mockScheduler.requestSync).toHaveBeenNthCalledWith(3, { userId: 1, bookId: 3, reason: 'rating' });
+  });
+
+  it.each([
+    ['created', ACHIEVEMENT_EVENT_ANNOTATION_CREATED],
+    ['updated', ACHIEVEMENT_EVENT_ANNOTATION_UPDATED],
+    ['deleted', ACHIEVEMENT_EVENT_ANNOTATION_DELETED],
+  ])('schedules quotes auto-sync when an annotation is %s', (_name, eventName) => {
+    const { events } = makeListener();
+
+    events.emit(eventName, { userId: 1, bookId: 10, annotationId: 99 });
+
+    expect(mockScheduler.requestSync).toHaveBeenCalledWith({ userId: 1, bookId: 10, reason: 'quotes' });
   });
 
   it('propagates a hardcoverEditionId change to the user sync state', async () => {

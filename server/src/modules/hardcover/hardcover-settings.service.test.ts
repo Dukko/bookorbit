@@ -118,6 +118,18 @@ describe('HardcoverSettingsService', () => {
       expect(result.tokenConfigured).toBe(false);
       expect(result.lastSyncedAt).toBeNull();
     });
+
+    it('defaults syncQuotes to false when unset', async () => {
+      mockRepo.findSettings.mockResolvedValue({ apiToken: 'secret', enabled: true });
+      const result = await makeService().getSettings(1);
+      expect(result.syncQuotes).toBe(false);
+    });
+
+    it('reflects syncQuotes true when set', async () => {
+      mockRepo.findSettings.mockResolvedValue({ apiToken: 'secret', enabled: true, syncQuotes: true });
+      const result = await makeService().getSettings(1);
+      expect(result.syncQuotes).toBe(true);
+    });
   });
 
   describe('upsertSettings', () => {
@@ -159,6 +171,13 @@ describe('HardcoverSettingsService', () => {
       const result = await makeService().upsertSettings(1, { apiToken: 'token', bookSyncMode: 'selected_only' });
       expect(result.tokenConfigured).toBe(true);
       expect(mockRepo.upsertSettings).toHaveBeenCalledWith(1, { apiToken: 'token', bookSyncMode: 'selected_only' });
+    });
+
+    it('passes syncQuotes through to the repository', async () => {
+      mockRepo.findSettings.mockResolvedValue({ apiToken: 'token', enabled: true });
+      mockRepo.upsertSettings.mockResolvedValue({});
+      await makeService().upsertSettings(1, { syncQuotes: true });
+      expect(mockRepo.upsertSettings).toHaveBeenCalledWith(1, expect.objectContaining({ syncQuotes: true }));
     });
 
     it('carries existing token forward when updating settings without a new token', async () => {

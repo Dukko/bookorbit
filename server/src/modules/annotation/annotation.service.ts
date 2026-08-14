@@ -3,7 +3,12 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import type { AnnotationListResponse } from '@bookorbit/types';
 import type { RequestUser } from '../../common/types/request-user';
 import { BookService } from '../book/book.service';
-import { AchievementEventsService, ACHIEVEMENT_EVENT_ANNOTATION_CREATED } from '../achievement/achievement-events.service';
+import {
+  AchievementEventsService,
+  ACHIEVEMENT_EVENT_ANNOTATION_CREATED,
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
+} from '../achievement/achievement-events.service';
 import { DEFAULT_ANNOTATION_COLOR, DEFAULT_ANNOTATION_STYLE } from './annotation.constants';
 import { AnnotationConversionService } from './annotation-conversion.service';
 import { AnnotationRepository, type AnnotationFilters, type AnnotationSort } from './annotation.repository';
@@ -101,6 +106,11 @@ export class AnnotationService {
       ...(dto.style !== undefined && { style: dto.style }),
     });
     if (!row) throw new NotFoundException(this.notFoundMessage(bookId, annotationId));
+    this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, {
+      userId: user.id,
+      bookId,
+      annotationId: row.id,
+    });
     return AnnotationResponseDto.from(row);
   }
 
@@ -108,6 +118,11 @@ export class AnnotationService {
     await this.bookService.verifyBookAccess(bookId, user);
     const deleted = await this.annotationRepo.softDelete(bookId, annotationId, user.id);
     if (!deleted) throw new NotFoundException(this.notFoundMessage(bookId, annotationId));
+    this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, {
+      userId: user.id,
+      bookId,
+      annotationId,
+    });
   }
 
   private buildFilters(query: AnnotationQueryDto): AnnotationFilters {

@@ -21,6 +21,7 @@ const form = reactive({
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,
+  syncQuotes: false,
   privacySettingId: 3,
 })
 
@@ -32,6 +33,7 @@ onMounted(async () => {
     form.autoSyncOnStatusChange = settings.value.autoSyncOnStatusChange
     form.autoSyncOnProgressUpdate = settings.value.autoSyncOnProgressUpdate
     form.autoSyncOnRatingChange = settings.value.autoSyncOnRatingChange
+    form.syncQuotes = settings.value.syncQuotes
     form.privacySettingId = settings.value.privacySettingId
   }
 })
@@ -53,6 +55,7 @@ async function handleSave() {
     autoSyncOnStatusChange: form.autoSyncOnStatusChange,
     autoSyncOnProgressUpdate: form.autoSyncOnProgressUpdate,
     autoSyncOnRatingChange: form.autoSyncOnRatingChange,
+    syncQuotes: form.syncQuotes,
     privacySettingId: form.privacySettingId,
   })
   if (ok) {
@@ -222,6 +225,14 @@ function selectBookSyncMode(mode: 'all_eligible' | 'selected_only') {
           <p class="text-xs text-muted-foreground mt-0.5">{{ t('hardcover.connection.syncOnRating.description') }}</p>
         </div>
         <ToggleSwitch v-model="form.autoSyncOnRatingChange" :disabled="!form.enabled" />
+      </div>
+
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-sm">{{ t('hardcover.connection.syncQuotes.title') }}</p>
+          <p class="text-xs text-muted-foreground mt-0.5">{{ t('hardcover.connection.syncQuotes.description') }}</p>
+        </div>
+        <ToggleSwitch v-model="form.syncQuotes" :disabled="!form.enabled" />
       </div>
 
       <div class="flex items-center justify-between">

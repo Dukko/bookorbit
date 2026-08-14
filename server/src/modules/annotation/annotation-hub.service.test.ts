@@ -38,7 +38,10 @@ function makeService(rebuilderRegistered = false) {
     findHubAll: vi.fn().mockResolvedValue([makeHubRow()]),
     findHubBookFacets: vi.fn().mockResolvedValue([{ bookId: 5, bookTitle: 'A Book', author: 'An Author', count: 3 }]),
     findHubBookFacet: vi.fn().mockResolvedValue(null),
-    bulkSetDeleted: vi.fn().mockResolvedValue(2),
+    bulkSetDeleted: vi.fn().mockResolvedValue([
+      { id: 1, bookId: 5 },
+      { id: 2, bookId: 5 },
+    ]),
     bulkRestyle: vi.fn().mockResolvedValue(2),
     restore: vi.fn().mockResolvedValue(makeHubRow({ deletedAt: null })),
     findHubById: vi.fn().mockResolvedValue(makeHubRow()),
@@ -65,14 +68,16 @@ function makeService(rebuilderRegistered = false) {
   const rebuilder = { rebuildCanonicalPositions: vi.fn().mockResolvedValue({ rebuilt: true }) };
   const rebuilderRegistry = new DevicePositionRebuilderRegistry();
   if (rebuilderRegistered) rebuilderRegistry.register(rebuilder);
+  const achievementEvents = { emit: vi.fn() };
   const service = new AnnotationHubService(
     annotationRepo as never,
     exportService as never,
     syncRepo as never,
     conversionService as never,
     rebuilderRegistry,
+    achievementEvents as never,
   );
-  return { service, annotationRepo, exportService, syncRepo, conversionService, rebuilder, rebuilderRegistry };
+  return { service, annotationRepo, exportService, syncRepo, conversionService, rebuilder, rebuilderRegistry, achievementEvents };
 }
 
 describe('AnnotationHubService', () => {
@@ -243,12 +248,38 @@ describe('AnnotationHubService', () => {
       expect(result).toEqual({ affected: 2 });
     });
 
+    it('emits annotation.deleted for each trashed annotation', async () => {
+      const { service, achievementEvents } = makeService();
+
+      await service.bulk(10, { ids: [1, 2], action: 'trash' });
+
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.deleted', { userId: 10, bookId: 5, annotationId: 1 });
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.deleted', { userId: 10, bookId: 5, annotationId: 2 });
+    });
+
     it('restores the given ids', async () => {
       const { service, annotationRepo } = makeService();
 
       await service.bulk(10, { ids: [1], action: 'restore' });
 
       expect(annotationRepo.bulkSetDeleted).toHaveBeenCalledWith(10, [1], false);
+    });
+
+    it('emits annotation.updated for each restored annotation', async () => {
+      const { service, achievementEvents } = makeService();
+
+      await service.bulk(10, { ids: [1, 2], action: 'restore' });
+
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.updated', { userId: 10, bookId: 5, annotationId: 1 });
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.updated', { userId: 10, bookId: 5, annotationId: 2 });
+    });
+
+    it('does not emit annotation events for restyle', async () => {
+      const { service, achievementEvents } = makeService();
+
+      await service.bulk(10, { ids: [1], action: 'restyle', color: '#38BDF8', style: 'underline' });
+
+      expect(achievementEvents.emit).not.toHaveBeenCalled();
     });
 
     it('restyles the given ids with color and style', async () => {
@@ -269,11 +300,27 @@ describe('AnnotationHubService', () => {
       expect(result).toMatchObject({ id: 1, bookId: 5 });
     });
 
+    it('emits annotation.updated on successful restore', async () => {
+      const { service, achievementEvents } = makeService();
+
+      await service.restore(10, 1);
+
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.updated', { userId: 10, bookId: 5, annotationId: 1 });
+    });
+
     it('throws NotFoundException when the annotation is not in trash', async () => {
       const { service, annotationRepo } = makeService();
       annotationRepo.restore.mockResolvedValueOnce(null);
 
       await expect(service.restore(10, 1)).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('does not emit when the annotation is not in trash', async () => {
+      const { service, annotationRepo, achievementEvents } = makeService();
+      annotationRepo.restore.mockResolvedValueOnce(null);
+
+      await expect(service.restore(10, 1)).rejects.toBeInstanceOf(NotFoundException);
+      expect(achievementEvents.emit).not.toHaveBeenCalled();
     });
 
     it('falls back to the restored row when the hub re-read misses', async () => {

@@ -13,6 +13,7 @@ export interface HardcoverSettings {
   autoSyncOnStatusChange: boolean;
   autoSyncOnProgressUpdate: boolean;
   autoSyncOnRatingChange: boolean;
+  syncQuotes: boolean;
   privacySettingId: number;
   lastSyncedAt: string | null;
 }
@@ -24,6 +25,7 @@ export interface UpsertHardcoverSettingsPayload {
   autoSyncOnStatusChange?: boolean;
   autoSyncOnProgressUpdate?: boolean;
   autoSyncOnRatingChange?: boolean;
+  syncQuotes?: boolean;
   privacySettingId?: number;
 }
 

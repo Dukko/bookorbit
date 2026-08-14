@@ -39,6 +39,7 @@ export class HardcoverSettingsService {
       autoSyncOnStatusChange: row?.autoSyncOnStatusChange ?? true,
       autoSyncOnProgressUpdate: row?.autoSyncOnProgressUpdate ?? true,
       autoSyncOnRatingChange: row?.autoSyncOnRatingChange ?? true,
+      syncQuotes: row?.syncQuotes ?? false,
       privacySettingId: row?.privacySettingId ?? HARDCOVER_PRIVACY.PRIVATE,
       lastSyncedAt: row?.lastSyncedAt?.toISOString() ?? null,
     };
@@ -70,6 +71,7 @@ export class HardcoverSettingsService {
     if (payload.autoSyncOnStatusChange !== undefined) data.autoSyncOnStatusChange = payload.autoSyncOnStatusChange;
     if (payload.autoSyncOnProgressUpdate !== undefined) data.autoSyncOnProgressUpdate = payload.autoSyncOnProgressUpdate;
     if (payload.autoSyncOnRatingChange !== undefined) data.autoSyncOnRatingChange = payload.autoSyncOnRatingChange;
+    if (payload.syncQuotes !== undefined) data.syncQuotes = payload.syncQuotes;
     if (payload.privacySettingId !== undefined) data.privacySettingId = payload.privacySettingId;
 
     await this.repo.upsertSettings(userId, data);

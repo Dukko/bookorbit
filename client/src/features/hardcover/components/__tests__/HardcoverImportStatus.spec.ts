@@ -236,6 +236,7 @@ describe('HardcoverImportStatus', () => {
       autoSyncOnStatusChange: false,
       autoSyncOnProgressUpdate: false,
       autoSyncOnRatingChange: false,
+      syncQuotes: false,
       privacySettingId: 1,
       lastSyncedAt: null,
     }

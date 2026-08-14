@@ -49,6 +49,7 @@ const defaultSettings = {
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,
+  syncQuotes: false,
   privacySettingId: 3,
 };
 

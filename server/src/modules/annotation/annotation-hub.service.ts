@@ -11,6 +11,11 @@ import type {
   AnnotationSyncDetail,
 } from '@bookorbit/types';
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
+import {
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
+  AchievementEventsService,
+} from '../achievement/achievement-events.service';
 import { AnnotationConversionService } from './annotation-conversion.service';
 import { AnnotationExportService, type AnnotationExportFormat, type AnnotationExportResult } from './annotation-export.service';
 import { AnnotationSyncRepository } from './annotation-sync.repository';
@@ -36,6 +41,7 @@ export class AnnotationHubService {
     private readonly syncRepo: AnnotationSyncRepository,
     private readonly conversionService: AnnotationConversionService,
     private readonly rebuilderRegistry: DevicePositionRebuilderRegistry,
+    private readonly achievementEvents: AchievementEventsService,
   ) {}
 
   async list(userId: number, query: AnnotationHubQueryDto): Promise<AnnotationHubResponse> {
@@ -83,9 +89,17 @@ export class AnnotationHubService {
     const startedAtMs = Date.now();
     let affected: number;
     if (dto.action === 'trash') {
-      affected = await this.annotationRepo.bulkSetDeleted(userId, dto.ids, true);
+      const rows = await this.annotationRepo.bulkSetDeleted(userId, dto.ids, true);
+      for (const row of rows) {
+        this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, { userId, bookId: row.bookId, annotationId: row.id });
+      }
+      affected = rows.length;
     } else if (dto.action === 'restore') {
-      affected = await this.annotationRepo.bulkSetDeleted(userId, dto.ids, false);
+      const rows = await this.annotationRepo.bulkSetDeleted(userId, dto.ids, false);
+      for (const row of rows) {
+        this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, { userId, bookId: row.bookId, annotationId: row.id });
+      }
+      affected = rows.length;
     } else {
       affected = await this.annotationRepo.bulkRestyle(userId, dto.ids, { color: dto.color, style: dto.style });
     }
@@ -98,6 +112,7 @@ export class AnnotationHubService {
   async restore(userId: number, annotationId: number): Promise<AnnotationHubItem> {
     const restored = await this.annotationRepo.restore(annotationId, userId);
     if (!restored) throw new NotFoundException(`Annotation ${annotationId} not found in trash`);
+    this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, { userId, bookId: restored.bookId, annotationId: restored.id });
     const row = await this.annotationRepo.findHubById(userId, annotationId);
     return this.toHubItem(
       row ?? {

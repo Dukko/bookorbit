@@ -15,6 +15,8 @@ import {
 import { AnnotationSyncRepository, type DbTx } from './annotation-sync.repository';
 import {
   ACHIEVEMENT_EVENT_ANNOTATION_CREATED,
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
   AchievementEventsService,
   type AnnotationCreatedPayload,
 } from '../achievement/achievement-events.service';
@@ -95,17 +97,21 @@ export class AnnotationSyncService {
     const startedAtMs = Date.now();
     const result: IngestResult = { created: 0, updated: 0, moved: 0, unchanged: 0, skippedDeleted: 0 };
     const createdIds: number[] = [];
+    const updatedIds: number[] = [];
 
     try {
       await this.syncRepo.transaction(async (tx) => {
         for (const incoming of this.dedupeByKey(params.annotations)) {
-          await this.ingestOne(params, incoming, result, createdIds, tx);
+          await this.ingestOne(params, incoming, result, createdIds, updatedIds, tx);
         }
       });
       // Emit only after the tx commits so listeners (e.g. Readwise flush that queries
       // rows with id > watermark) see the committed, visible rows.
       for (const annotationId of createdIds) {
         this.emitCreatedAnnotation(params.userId, params.bookId, annotationId);
+      }
+      for (const annotationId of updatedIds) {
+        this.emitAnnotationEvent(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, params.userId, params.bookId, annotationId);
       }
       this.logger.log(
         `[${INGEST_EVENT}] [end] userId=${params.userId} bookId=${params.bookId} deviceId=${params.deviceId.slice(0, 8)} durationMs=${Date.now() - startedAtMs} created=${result.created} updated=${result.updated} moved=${result.moved} unchanged=${result.unchanged} skippedDeleted=${result.skippedDeleted} - device annotations ingested`,
@@ -129,9 +135,13 @@ export class AnnotationSyncService {
   }
 
   private emitCreatedAnnotation(userId: number, bookId: number, annotationId: number): void {
+    this.emitAnnotationEvent(ACHIEVEMENT_EVENT_ANNOTATION_CREATED, userId, bookId, annotationId);
+  }
+
+  private emitAnnotationEvent(eventName: string, userId: number, bookId: number, annotationId: number): void {
     const startedAtMs = Date.now();
     try {
-      this.achievementEvents.emit(ACHIEVEMENT_EVENT_ANNOTATION_CREATED, {
+      this.achievementEvents.emit(eventName, {
         userId,
         bookId,
         annotationId,
@@ -139,7 +149,7 @@ export class AnnotationSyncService {
     } catch (error) {
       const errorClass = error instanceof Error ? error.constructor.name : 'UnknownError';
       this.logger.warn(
-        `[${INGEST_EMIT_EVENT}] [fail] userId=${userId} bookId=${bookId} annotationId=${annotationId} durationMs=${Date.now() - startedAtMs} errorClass=${errorClass} error="${sanitizeLogValue(error instanceof Error ? error.message : 'unknown error')}" - created annotation event dispatch failed`,
+        `[${INGEST_EMIT_EVENT}] [fail] event=${eventName} userId=${userId} bookId=${bookId} annotationId=${annotationId} durationMs=${Date.now() - startedAtMs} errorClass=${errorClass} error="${sanitizeLogValue(error instanceof Error ? error.message : 'unknown error')}" - annotation event dispatch failed`,
       );
     }
   }
@@ -149,6 +159,7 @@ export class AnnotationSyncService {
     incoming: IncomingDeviceAnnotation,
     result: IngestResult,
     createdIds: number[],
+    updatedIds: number[],
     tx: DbTx,
   ): Promise<void> {
     const { userId, source, deviceId, bookId, bookFileId } = params;
@@ -166,6 +177,7 @@ export class AnnotationSyncService {
       const changed = await this.applyIncomingContent(annotation, incoming, bookFileId, tx);
       if (changed) {
         await this.syncRepo.updateState(deviceState.id, { lastAppliedVersion: changed.newVersion }, tx);
+        updatedIds.push(annotation.id);
         result.updated += 1;
       } else {
         await this.syncRepo.touchState(deviceState.id, tx);
@@ -207,6 +219,7 @@ export class AnnotationSyncService {
       const changed = await this.applyIncomingContent(crossDevice.annotation, incoming, bookFileId, tx);
       if (changed) {
         await this.syncRepo.updateState(state.id, { lastAppliedVersion: changed.newVersion }, tx);
+        updatedIds.push(crossDevice.annotation.id);
         result.updated += 1;
       } else {
         result.unchanged += 1;
@@ -270,6 +283,7 @@ export class AnnotationSyncService {
       if (changed) {
         await this.syncRepo.updateState(state.id, { lastAppliedVersion: changed.newVersion }, tx);
       }
+      if (isMove || changed) updatedIds.push(annotation.id);
       result[isMove ? 'moved' : changed ? 'updated' : 'unchanged'] += 1;
       return;
     }
@@ -416,6 +430,7 @@ export class AnnotationSyncService {
   }): Promise<number> {
     if (params.deletes.length === 0) return 0;
     let deleted = 0;
+    const deletedIds: number[] = [];
 
     await this.syncRepo.transaction(async (tx) => {
       for (const entry of params.deletes) {
@@ -423,6 +438,7 @@ export class AnnotationSyncService {
         if (!match) continue;
         if (!match.annotation.deletedAt) {
           await this.syncRepo.softDeleteById(match.annotation.id, tx);
+          deletedIds.push(match.annotation.id);
           deleted += 1;
         }
         const reporterState =
@@ -449,6 +465,9 @@ export class AnnotationSyncService {
       }
     });
 
+    for (const annotationId of deletedIds) {
+      this.emitAnnotationEvent(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, params.userId, params.bookId, annotationId);
+    }
     if (deleted > 0) {
       this.logger.log(
         `[annotation.sync_delete_ops] [end] userId=${params.userId} bookId=${params.bookId} deviceId=${params.deviceId.slice(0, 8)} deleted=${deleted} - device delete operations applied`,
@@ -548,6 +567,7 @@ export class AnnotationSyncService {
     const present = new Set(params.presentKeys.map((entry) => entry.k));
     const presentDatetimes = new Set(params.presentKeys.map((entry) => entry.dt));
     let deletedCount = 0;
+    const deletedIds: number[] = [];
 
     await this.syncRepo.transaction(async (tx) => {
       const states = await this.syncRepo.findStatesForDeviceBook(params.userId, params.source, params.deviceId, params.bookId, tx);
@@ -557,10 +577,14 @@ export class AnnotationSyncService {
         if (state.externalCreatedAt && presentDatetimes.has(state.externalCreatedAt)) continue;
         await this.syncRepo.softDeleteById(annotation.id, tx);
         await this.syncRepo.setDeleteAcked(state.id, tx);
+        deletedIds.push(annotation.id);
         deletedCount += 1;
       }
     });
 
+    for (const annotationId of deletedIds) {
+      this.emitAnnotationEvent(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, params.userId, params.bookId, annotationId);
+    }
     if (deletedCount > 0) {
       this.logger.log(
         `[annotation.sync_delete_detect] [end] userId=${params.userId} bookId=${params.bookId} deviceId=${params.deviceId.slice(0, 8)} deleted=${deletedCount} - device deletions applied`,

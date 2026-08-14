@@ -20,3 +20,10 @@ export const HARDCOVER_PRIVACY = {
 export const HARDCOVER_EVENT = {
   RATING_CHANGED: 'hardcover.rating_changed',
 } as const;
+
+export const HARDCOVER_QUOTE_JOURNAL_EVENT = 'quote';
+// How many highlights to push per syncBookQuotes drain iteration.
+export const HARDCOVER_QUOTE_BATCH_SIZE = 25;
+// Hardcover's reading_journal.entry has no documented cap; keep it well under Postgres's
+// text limits and Hardcover's own UI truncation for quotes.
+export const HARDCOVER_QUOTE_MAX_TEXT_LENGTH = 8191;

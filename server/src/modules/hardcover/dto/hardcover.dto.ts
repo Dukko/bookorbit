@@ -29,6 +29,10 @@ export class UpsertHardcoverSettingsDto {
   autoSyncOnRatingChange?: boolean;
 
   @IsOptional()
+  @IsBoolean()
+  syncQuotes?: boolean;
+
+  @IsOptional()
   @IsInt()
   @IsIn([1, 2, 3])
   privacySettingId?: number;

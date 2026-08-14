@@ -1,7 +1,12 @@
 import { Logger } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ACHIEVEMENT_EVENT_ANNOTATION_CREATED, AchievementEventsService } from '../achievement/achievement-events.service';
+import {
+  ACHIEVEMENT_EVENT_ANNOTATION_CREATED,
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
+  AchievementEventsService,
+} from '../achievement/achievement-events.service';
 import type { AnnotationSyncRepository } from './annotation-sync.repository';
 import { AnnotationSyncService, buildAnnotationKey, type IncomingDeviceAnnotation } from './annotation-sync.service';
 
@@ -358,6 +363,46 @@ describe('AnnotationSyncService', () => {
     });
   });
 
+  describe('annotation.updated event emission', () => {
+    it('emits ACHIEVEMENT_EVENT_ANNOTATION_UPDATED once content actually changes', async () => {
+      repo.findStateByDeviceKey.mockResolvedValue(makeStateRow());
+      repo.findAnnotationById.mockResolvedValue(makeAnnotationRow({ style: 'squiggly', color: '#FACC15' }));
+      repo.findDevicePosition.mockResolvedValue(makePositionRow());
+
+      await ingest(service, [makeIncoming({ datetimeUpdated: '2026-06-02 08:00:00', note: 'device note', drawer: 'underscore', color: 'yellow' })]);
+
+      expect(emitSpy).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, { userId: USER_ID, bookId: BOOK_ID, annotationId: 100 });
+    });
+
+    it('does not emit for a no-op re-upload', async () => {
+      repo.findStateByDeviceKey.mockResolvedValue(makeStateRow());
+      repo.findAnnotationById.mockResolvedValue(makeAnnotationRow());
+      repo.findDevicePosition.mockResolvedValue(makePositionRow());
+
+      await ingest(service, [makeIncoming()]);
+
+      expect(emitSpy).not.toHaveBeenCalledWith(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, expect.anything());
+    });
+
+    it('emits only after the transaction commits', async () => {
+      repo.findStateByDeviceKey.mockResolvedValue(makeStateRow());
+      repo.findAnnotationById.mockResolvedValue(makeAnnotationRow({ style: 'squiggly', color: '#FACC15' }));
+      repo.findDevicePosition.mockResolvedValue(makePositionRow());
+
+      let emitCallsAtTxResolve = -1;
+      repo.transaction.mockImplementationOnce((async (fn: (tx: unknown) => Promise<unknown>) => {
+        const result = await fn(TX);
+        emitCallsAtTxResolve = emitSpy.mock.calls.length;
+        return result;
+      }) as never);
+
+      await ingest(service, [makeIncoming({ datetimeUpdated: '2026-06-02 08:00:00', note: 'device note' })]);
+
+      expect(emitCallsAtTxResolve).toBe(0);
+      expect(emitSpy).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, expect.anything());
+    });
+  });
+
   describe('cross-device and derived matches', () => {
     it('links a second device to an existing annotation via the shared key', async () => {
       repo.findStateByKeyAnyDevice.mockResolvedValue({
@@ -455,6 +500,7 @@ describe('AnnotationSyncService', () => {
       expect(deleted).toBe(1);
       expect(repo.softDeleteById).toHaveBeenCalledWith(100, TX);
       expect(repo.setDeleteAcked).toHaveBeenCalledWith(900, TX);
+      expect(emitSpy).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, { userId: USER_ID, bookId: BOOK_ID, annotationId: 100 });
     });
 
     it('keeps annotations whose key is still present', async () => {
@@ -775,6 +821,7 @@ describe('AnnotationSyncService', () => {
       expect(deleted).toBe(1);
       expect(repo.softDeleteById).toHaveBeenCalledWith(100, TX);
       expect(repo.setDeleteAcked).toHaveBeenCalledWith(900, TX);
+      expect(emitSpy).toHaveBeenCalledWith(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, { userId: USER_ID, bookId: BOOK_ID, annotationId: 100 });
     });
 
     it('inserts an acked state when another device reported the deletion', async () => {

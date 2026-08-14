@@ -24,6 +24,7 @@ const SETTINGS: HardcoverSettings = {
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,
+  syncQuotes: false,
   privacySettingId: 3,
   lastSyncedAt: null,
 }

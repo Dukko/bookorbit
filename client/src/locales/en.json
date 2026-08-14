@@ -5350,9 +5350,13 @@
         "title": "Sync on rating change",
         "description": "Push your star ratings to Hardcover."
       },
+      "syncQuotes": {
+        "title": "Sync highlights as quotes",
+        "description": "Push your highlights to Hardcover as quotes on the linked book."
+      },
       "privacy": {
         "title": "Privacy",
-        "description": "Default visibility for synced books on Hardcover.",
+        "description": "Default visibility for synced books and quotes on Hardcover.",
         "public": "Public",
         "followersOnly": "Followers only",
         "private": "Private"

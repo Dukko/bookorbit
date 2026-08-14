@@ -7,6 +7,7 @@ import {
   HARDCOVER_AUTO_SYNC_DEBOUNCE_MS,
   type HardcoverAutoSyncReason,
 } from './hardcover-auto-sync-scheduler.service';
+import { HardcoverQuoteSyncService } from './hardcover-quote-sync.service';
 import { HardcoverRepository } from './hardcover.repository';
 import { HardcoverSettingsService } from './hardcover-settings.service';
 import { HardcoverSyncService } from './hardcover-sync.service';
@@ -19,6 +20,10 @@ const mockSyncService = {
   syncBook: vi.fn(),
 };
 
+const mockQuoteSyncService = {
+  syncBookQuotes: vi.fn(),
+};
+
 const mockRepository = {
   findBookIdByFileId: vi.fn(),
 };
@@ -28,9 +33,11 @@ const enabledSettings: HardcoverSettings = {
   enabled: true,
   effectiveEnabled: true,
   disabledReason: null,
+  bookSyncMode: 'all_eligible',
   autoSyncOnStatusChange: true,
   autoSyncOnProgressUpdate: true,
   autoSyncOnRatingChange: true,
+  syncQuotes: true,
   privacySettingId: 3,
   lastSyncedAt: null,
 };
@@ -64,12 +71,14 @@ describe('HardcoverAutoSyncSchedulerService', () => {
 
     mockSettingsService.getSettings.mockResolvedValue(enabledSettings);
     mockSyncService.syncBook.mockResolvedValue(undefined);
+    mockQuoteSyncService.syncBookQuotes.mockResolvedValue(undefined);
     mockRepository.findBookIdByFileId.mockResolvedValue(42);
     warnSpy = vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
 
     service = new HardcoverAutoSyncSchedulerService(
       mockSettingsService as unknown as HardcoverSettingsService,
       mockSyncService as unknown as HardcoverSyncService,
+      mockQuoteSyncService as unknown as HardcoverQuoteSyncService,
       mockRepository as unknown as HardcoverRepository,
     );
   });
@@ -98,6 +107,7 @@ describe('HardcoverAutoSyncSchedulerService', () => {
     ['status', 'autoSyncOnStatusChange'],
     ['progress', 'autoSyncOnProgressUpdate'],
     ['rating', 'autoSyncOnRatingChange'],
+    ['quotes', 'syncQuotes'],
   ] as Array<[HardcoverAutoSyncReason, keyof typeof enabledSettings]>)(
     'skips %s sync when the matching toggle is disabled',
     async (reason, settingKey) => {
@@ -107,8 +117,25 @@ describe('HardcoverAutoSyncSchedulerService', () => {
       await advanceDebounce();
 
       expect(mockSyncService.syncBook).not.toHaveBeenCalled();
+      expect(mockQuoteSyncService.syncBookQuotes).not.toHaveBeenCalled();
     },
   );
+
+  it('calls quoteSyncService.syncBookQuotes alongside syncService.syncBook when quotes reason is enabled', async () => {
+    service.requestSync({ userId: 1, bookId: 10, reason: 'quotes' });
+    await advanceDebounce();
+
+    expect(mockSyncService.syncBook).toHaveBeenCalledWith(1, 10);
+    expect(mockQuoteSyncService.syncBookQuotes).toHaveBeenCalledWith(1, 10);
+  });
+
+  it('does not call quoteSyncService.syncBookQuotes when quotes is not among the coalesced reasons', async () => {
+    service.requestSync({ userId: 1, bookId: 10, reason: 'status' });
+    await advanceDebounce();
+
+    expect(mockSyncService.syncBook).toHaveBeenCalledWith(1, 10);
+    expect(mockQuoteSyncService.syncBookQuotes).not.toHaveBeenCalled();
+  });
 
   it('syncs when at least one coalesced reason has an enabled toggle', async () => {
     mockSettingsService.getSettings.mockResolvedValue({ ...enabledSettings, autoSyncOnProgressUpdate: false });

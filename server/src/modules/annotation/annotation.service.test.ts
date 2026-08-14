@@ -73,7 +73,7 @@ function makeService() {
   };
   const conversionService = { ensureCfiPositionsForBook: vi.fn().mockResolvedValue(0) };
   const service = new AnnotationService(annotationRepo as never, bookService as never, achievementEvents as never, conversionService as never);
-  return { service, annotationRepo, bookService, conversionService };
+  return { service, annotationRepo, bookService, conversionService, achievementEvents };
 }
 
 describe('AnnotationService', () => {
@@ -296,6 +296,23 @@ describe('AnnotationService', () => {
 
       expect(annotationRepo.update).toHaveBeenCalledWith(5, 10, 1, { color: '#38BDF8', style: 'underline' });
     });
+
+    it('emits an annotation.updated event on success', async () => {
+      const { service, annotationRepo, achievementEvents } = makeService();
+      annotationRepo.update.mockResolvedValue(makeAnnotationRow());
+
+      await service.updateAnnotation(5, 10, makeUser(), { note: 'x' });
+
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.updated', { userId: 1, bookId: 5, annotationId: 10 });
+    });
+
+    it('does not emit annotation.updated when the annotation is not found', async () => {
+      const { service, annotationRepo, achievementEvents } = makeService();
+      annotationRepo.update.mockResolvedValue(null);
+
+      await expect(service.updateAnnotation(5, 99, makeUser(), {})).rejects.toThrow(NotFoundException);
+      expect(achievementEvents.emit).not.toHaveBeenCalled();
+    });
   });
 
   describe('deleteAnnotation', () => {
@@ -328,6 +345,23 @@ describe('AnnotationService', () => {
       await service.deleteAnnotation(5, 10, makeUser());
 
       expect(bookService.verifyBookAccess).toHaveBeenCalledWith(5, expect.objectContaining({ id: 1 }));
+    });
+
+    it('emits an annotation.deleted event on success', async () => {
+      const { service, annotationRepo, achievementEvents } = makeService();
+      annotationRepo.softDelete.mockResolvedValue(true);
+
+      await service.deleteAnnotation(5, 10, makeUser());
+
+      expect(achievementEvents.emit).toHaveBeenCalledWith('annotation.deleted', { userId: 1, bookId: 5, annotationId: 10 });
+    });
+
+    it('does not emit annotation.deleted when the annotation is not found', async () => {
+      const { service, annotationRepo, achievementEvents } = makeService();
+      annotationRepo.softDelete.mockResolvedValue(false);
+
+      await expect(service.deleteAnnotation(5, 99, makeUser())).rejects.toThrow(NotFoundException);
+      expect(achievementEvents.emit).not.toHaveBeenCalled();
     });
 
     it('propagates ForbiddenException before touching the annotation', async () => {

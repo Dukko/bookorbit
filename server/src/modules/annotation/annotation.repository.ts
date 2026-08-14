@@ -453,8 +453,8 @@ export class AnnotationRepository {
     return rows[0] ?? null;
   }
 
-  async bulkSetDeleted(userId: number, ids: number[], deleted: boolean): Promise<number> {
-    if (ids.length === 0) return 0;
+  async bulkSetDeleted(userId: number, ids: number[], deleted: boolean): Promise<{ id: number; bookId: number }[]> {
+    if (ids.length === 0) return [];
     const result = await this.db
       .update(annotations)
       .set({
@@ -465,8 +465,8 @@ export class AnnotationRepository {
       .where(
         and(inArray(annotations.id, ids), eq(annotations.userId, userId), deleted ? isNull(annotations.deletedAt) : isNotNull(annotations.deletedAt)),
       )
-      .returning({ id: annotations.id });
-    return result.length;
+      .returning({ id: annotations.id, bookId: annotations.bookId });
+    return result;
   }
 
   async bulkRestyle(userId: number, ids: number[], patch: { color?: string; style?: string }): Promise<number> {

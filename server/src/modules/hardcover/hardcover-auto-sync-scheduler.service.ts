@@ -1,13 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
+import { HardcoverQuoteSyncService } from './hardcover-quote-sync.service';
 import { HardcoverRepository } from './hardcover.repository';
 import { HardcoverSettingsService } from './hardcover-settings.service';
 import { HardcoverSyncService } from './hardcover-sync.service';
 
 export const HARDCOVER_AUTO_SYNC_DEBOUNCE_MS = 1000;
 
-export type HardcoverAutoSyncReason = 'status' | 'progress' | 'rating';
+export type HardcoverAutoSyncReason = 'status' | 'progress' | 'rating' | 'quotes';
 
 type HardcoverSettingsSnapshot = Awaited<ReturnType<HardcoverSettingsService['getSettings']>>;
 
@@ -33,7 +34,7 @@ interface AutoSyncState {
 }
 
 const AUTO_SYNC_EVENT = 'hardcover.auto_sync';
-const REASON_ORDER: HardcoverAutoSyncReason[] = ['status', 'progress', 'rating'];
+const REASON_ORDER: HardcoverAutoSyncReason[] = ['status', 'progress', 'rating', 'quotes'];
 
 @Injectable()
 export class HardcoverAutoSyncSchedulerService {
@@ -44,6 +45,7 @@ export class HardcoverAutoSyncSchedulerService {
   constructor(
     private readonly settingsService: HardcoverSettingsService,
     private readonly syncService: HardcoverSyncService,
+    private readonly quoteSyncService: HardcoverQuoteSyncService,
     private readonly repository: HardcoverRepository,
   ) {}
 
@@ -115,6 +117,9 @@ export class HardcoverAutoSyncSchedulerService {
         if (!(await this.isAutoSyncEnabled(userId, reasons))) return;
 
         await this.syncService.syncBook(userId, bookId);
+        if (reasons.has('quotes')) {
+          await this.quoteSyncService.syncBookQuotes(userId, bookId);
+        }
       } catch (err) {
         this.logFailure({ userId, bookId, reasons: formattedReasons, startedAt, err });
       }
@@ -161,6 +166,7 @@ export class HardcoverAutoSyncSchedulerService {
     if (reasons.has('status') && settings.autoSyncOnStatusChange) return true;
     if (reasons.has('progress') && settings.autoSyncOnProgressUpdate) return true;
     if (reasons.has('rating') && settings.autoSyncOnRatingChange) return true;
+    if (reasons.has('quotes') && settings.syncQuotes) return true;
     return false;
   }
 

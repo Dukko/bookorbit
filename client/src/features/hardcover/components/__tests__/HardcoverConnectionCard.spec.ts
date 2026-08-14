@@ -50,6 +50,7 @@ function makeSettings(overrides: Partial<HardcoverSettings> = {}): HardcoverSett
     bookSyncMode: 'all_eligible',
     autoSyncOnStatusChange: true,
     autoSyncOnProgressUpdate: true,
+    syncQuotes: false,
     autoSyncOnRatingChange: true,
     privacySettingId: 3,
     lastSyncedAt: null,

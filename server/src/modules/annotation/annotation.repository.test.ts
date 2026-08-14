@@ -485,31 +485,37 @@ describe('AnnotationRepository', () => {
   });
 
   describe('bulkSetDeleted', () => {
-    it('returns 0 for an empty id list without querying', async () => {
+    it('returns an empty array for an empty id list without querying', async () => {
       const db = makeDb();
       const repo = new AnnotationRepository(db as never);
 
-      expect(await repo.bulkSetDeleted(10, [], true)).toBe(0);
+      expect(await repo.bulkSetDeleted(10, [], true)).toEqual([]);
       expect(db.update).not.toHaveBeenCalled();
     });
 
-    it('soft-deletes the given ids and returns the affected count', async () => {
-      const db = makeDb([{ id: 1 }, { id: 2 }]);
+    it('soft-deletes the given ids and returns the affected id/bookId rows', async () => {
+      const db = makeDb([
+        { id: 1, bookId: 5 },
+        { id: 2, bookId: 5 },
+      ]);
       const repo = new AnnotationRepository(db as never);
 
       const affected = await repo.bulkSetDeleted(10, [1, 2], true);
 
-      expect(affected).toBe(2);
+      expect(affected).toEqual([
+        { id: 1, bookId: 5 },
+        { id: 2, bookId: 5 },
+      ]);
       expect(db._queries[0].set.mock.calls[0][0]).toHaveProperty('deletedAt');
     });
 
     it('restores when deleted is false', async () => {
-      const db = makeDb([{ id: 1 }]);
+      const db = makeDb([{ id: 1, bookId: 5 }]);
       const repo = new AnnotationRepository(db as never);
 
       const affected = await repo.bulkSetDeleted(10, [1], false);
 
-      expect(affected).toBe(1);
+      expect(affected).toEqual([{ id: 1, bookId: 5 }]);
       expect(db._queries[0].set.mock.calls[0][0]).toMatchObject({ deletedAt: null });
     });
   });

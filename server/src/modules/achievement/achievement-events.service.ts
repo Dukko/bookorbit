@@ -4,6 +4,8 @@ import { EventEmitter } from 'events';
 export const ACHIEVEMENT_EVENT_READING_SESSION_SAVED = 'reading-session.saved';
 export const ACHIEVEMENT_EVENT_BOOK_STATUS_CHANGED = 'book.status-changed';
 export const ACHIEVEMENT_EVENT_ANNOTATION_CREATED = 'annotation.created';
+export const ACHIEVEMENT_EVENT_ANNOTATION_UPDATED = 'annotation.updated';
+export const ACHIEVEMENT_EVENT_ANNOTATION_DELETED = 'annotation.deleted';
 export const ACHIEVEMENT_EVENT_COLLECTION_CREATED = 'collection.created';
 export const ACHIEVEMENT_EVENT_LIBRARY_CATALOG_CHANGED = 'library.catalog-changed';
 export const ACHIEVEMENT_EVENT_BACKFILL = 'achievement.backfill';

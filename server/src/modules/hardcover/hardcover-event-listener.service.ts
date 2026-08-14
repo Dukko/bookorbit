@@ -2,12 +2,16 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 
 import { sanitizeLogValue } from '../../common/utils/log-sanitize.utils';
 import {
+  ACHIEVEMENT_EVENT_ANNOTATION_CREATED,
+  ACHIEVEMENT_EVENT_ANNOTATION_DELETED,
+  ACHIEVEMENT_EVENT_ANNOTATION_UPDATED,
   ACHIEVEMENT_EVENT_BOOK_HARDCOVER_EDITION_CHANGED,
   ACHIEVEMENT_EVENT_BOOK_PROGRESS_CHANGED,
   ACHIEVEMENT_EVENT_BOOK_RATING_CHANGED,
   ACHIEVEMENT_EVENT_BOOK_STATUS_CHANGED,
   ACHIEVEMENT_EVENT_READING_SESSION_SAVED,
   AchievementEventsService,
+  type AnnotationCreatedPayload,
   type BookHardcoverEditionChangedPayload,
   type BookProgressChangedPayload,
   type BookRatingChangedPayload,
@@ -47,6 +51,18 @@ export class HardcoverEventListener implements OnModuleInit {
     this.achievementEvents.on(ACHIEVEMENT_EVENT_BOOK_HARDCOVER_EDITION_CHANGED, (payload: BookHardcoverEditionChangedPayload) => {
       void this.handleHardcoverEditionChanged(payload);
     });
+
+    this.achievementEvents.on(ACHIEVEMENT_EVENT_ANNOTATION_CREATED, (payload: AnnotationCreatedPayload) => {
+      this.handleAnnotationChanged(payload);
+    });
+
+    this.achievementEvents.on(ACHIEVEMENT_EVENT_ANNOTATION_UPDATED, (payload: AnnotationCreatedPayload) => {
+      this.handleAnnotationChanged(payload);
+    });
+
+    this.achievementEvents.on(ACHIEVEMENT_EVENT_ANNOTATION_DELETED, (payload: AnnotationCreatedPayload) => {
+      this.handleAnnotationChanged(payload);
+    });
   }
 
   private handleStatusChanged(payload: BookStatusChangedPayload): void {
@@ -65,6 +81,10 @@ export class HardcoverEventListener implements OnModuleInit {
     for (const bookId of payload.bookIds) {
       this.scheduler.requestSync({ userId: payload.userId, bookId, reason: 'rating' });
     }
+  }
+
+  private handleAnnotationChanged(payload: AnnotationCreatedPayload): void {
+    this.scheduler.requestSync({ userId: payload.userId, bookId: payload.bookId, reason: 'quotes' });
   }
 
   private async handleHardcoverEditionChanged(payload: BookHardcoverEditionChangedPayload): Promise<void> {
