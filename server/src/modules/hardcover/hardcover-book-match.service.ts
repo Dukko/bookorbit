@@ -45,6 +45,7 @@ query SearchBooks($query: String!) {
     page: 1
     fields: "title,author_names,alternative_titles"
     weights: "5,2,1"
+    typos: "1,1,1"
   ) {
     ids
   }
