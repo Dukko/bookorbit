@@ -1,0 +1,32 @@
+{
+  "name": "@bookorbit/obsidian-sync",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "Export BookOrbit reading stats and highlights into an Obsidian vault as Dataview-friendly Markdown.",
+  "type": "module",
+  "bin": {
+    "bookorbit-sync": "dist/sync.mjs"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  },
+  "scripts": {
+    "sync": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node18 --outfile=dist/sync.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@bookorbit/types": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.2",
+    "prettier": "^3.3.0",
+    "tsx": "^4.23.15",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.2"
+  }
+}
